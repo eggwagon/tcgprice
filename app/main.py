@@ -66,6 +66,13 @@ async def get_card_price(card_name: str, set: str = None):
     name_query = card_name.lower()
     versions = card_database.get(name_query)
 
+    # Fallback to starts-with search if no exact match found
+    if not versions:
+        # Find the first card name that starts with the user's query
+        matching_key = next((name for name in card_database.keys() if name.startswith(name_query)), None)
+        if matching_key:
+            versions = card_database[matching_key]
+
     if not versions:
         raise HTTPException(status_code=404, detail="Card not found in the local dataset.")
 
