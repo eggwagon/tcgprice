@@ -56,16 +56,23 @@ async def root():
     return {"message": f"TCG Price API is {status}. Use /price/{{card_name}} to search."}
 
 @app.get("/price/{card_name:path}")
-async def get_card_price(card_name: str, set: str = None):
+@app.get("/price")
+async def get_card_price(card_name: str = None, name: str = None, set: str = None):
     """
-    Retrieves pricing information. Optional 'set' parameter filters by set code or set name.
+    Retrieves pricing information. 
+    Accepts card name via path or 'name' query parameter (recommended for split cards).
+    Optional 'set' parameter filters by set code or set name.
     """
     if not card_database:
         raise HTTPException(status_code=503, detail="The database is still initializing. Please wait a moment.")
 
-    # Normalize slashes to match Scryfall's " // " format for split cards
-    # and convert to lowercase for the dictionary lookup.
-    name_query = card_name.replace("//", " // ").replace("  //  ", " // ").lower().strip()
+    # Prioritize query parameter 'name' over path parameter 'card_name'
+    raw_name = name or card_name
+    if not raw_name:
+        raise HTTPException(status_code=400, detail="Card name must be provided via path or query parameter.")
+
+    # Normalize slashes to match Scryfall's " // " format and lowercase for lookup
+    name_query = raw_name.replace("//", " // ").replace("  //  ", " // ").lower().strip()
     
     versions = card_database.get(name_query)
 
@@ -77,7 +84,7 @@ async def get_card_price(card_name: str, set: str = None):
             versions = card_database[matching_key]
 
     if not versions:
-        raise HTTPException(status_code=404, detail="Card not found in the local dataset.")
+        raise HTTPException(status_code=404, detail=f"Card '{raw_name}' not found in the local dataset.")
 
     # Filter by set if provided
     if set:
