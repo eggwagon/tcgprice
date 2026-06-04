@@ -31,7 +31,10 @@ async def lifespan(app: FastAPI):
             # 3. Parse JSON and index it by name (lowercase for case-insensitive search)
             cards = response.json()
             for card in cards:
-                card_database[card["name"].lower()] = card
+                name = card["name"].lower()
+                if name not in card_database:
+                    card_database[name] = []
+                card_database[name].append(card)
             
             logger.info(f"Ready. Indexed {len(card_database)} cards in memory.")
         except Exception as e:
@@ -53,25 +56,37 @@ async def root():
     return {"message": f"TCG Price API is {status}. Use /price/{{card_name}} to search."}
 
 @app.get("/price/{card_name}")
-async def get_card_price(card_name: str):
+async def get_card_price(card_name: str, set: str = None):
     """
-    Retrieves pricing information from the locally indexed JSON data.
+    Retrieves pricing information. Optional 'set' parameter filters by set code or set name.
     """
     if not card_database:
         raise HTTPException(status_code=503, detail="The database is still initializing. Please wait a moment.")
 
     name_query = card_name.lower()
-    
-    # Perform an exact name match (case-insensitive)
-    data = card_database.get(name_query)
-    
-    if not data:
+    versions = card_database.get(name_query)
+
+    if not versions:
         raise HTTPException(status_code=404, detail="Card not found in the local dataset.")
+
+    # Filter by set if provided
+    if set:
+        set_query = set.lower()
+        # Search through versions for a match on set code or set name
+        matched = [c for c in versions if c["set"].lower() == set_query or c["set_name"].lower() == set_query]
+        
+        if not matched:
+            raise HTTPException(status_code=404, detail=f"Card '{card_name}' found, but no printing exists for set '{set}'.")
+        data = matched[0]
+    else:
+        # Default to the first printing if no set is specified
+        data = versions[0]
 
     # Extract and return the card info
     return {
         "name": data.get("name"),
         "set_name": data.get("set_name"),
+        "set_code": data.get("set"),
         "prices": data.get("prices", {}),
         "scryfall_uri": data.get("scryfall_uri"),
         "image": data.get("image_uris", {}).get("normal")
