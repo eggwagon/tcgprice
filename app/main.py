@@ -55,7 +55,7 @@ async def root():
     status = "Ready" if card_database else "Data loading..."
     return {"message": f"TCG Price API is {status}. Use /price/{{card_name}} to search."}
 
-@app.get("/price/{card_name}")
+@app.get("/price/{card_name:path}")
 async def get_card_price(card_name: str, set: str = None):
     """
     Retrieves pricing information. Optional 'set' parameter filters by set code or set name.
@@ -63,7 +63,10 @@ async def get_card_price(card_name: str, set: str = None):
     if not card_database:
         raise HTTPException(status_code=503, detail="The database is still initializing. Please wait a moment.")
 
-    name_query = card_name.lower()
+    # Normalize slashes to match Scryfall's " // " format for split cards
+    # and convert to lowercase for the dictionary lookup.
+    name_query = card_name.replace("//", " // ").replace("  //  ", " // ").lower().strip()
+    
     versions = card_database.get(name_query)
 
     # Fallback to starts-with search if no exact match found
