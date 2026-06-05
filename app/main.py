@@ -57,11 +57,11 @@ async def root():
 
 @app.get("/price/{card_name:path}")
 @app.get("/price")
-async def get_card_price(card_name: str = None, name: str = None, set: str = None):
+async def get_card_price(card_name: str = None, name: str = None, set: str = None, lang: str = "en"):
     """
     Retrieves pricing information. 
     Accepts card name via path or 'name' query parameter (recommended for split cards).
-    Optional 'set' parameter filters by set code or set name.
+    Optional 'set' and 'lang' parameters filter by set and language (defaults to 'en').
     """
     if not card_database:
         raise HTTPException(status_code=503, detail="The database is still initializing. Please wait a moment.")
@@ -86,6 +86,13 @@ async def get_card_price(card_name: str = None, name: str = None, set: str = Non
     if not versions:
         raise HTTPException(status_code=404, detail=f"Card '{raw_name}' not found in the local dataset.")
 
+    # Filter by language (default 'en')
+    lang_query = lang.lower()
+    versions = [c for c in versions if c.get("lang", "").lower() == lang_query]
+
+    if not versions:
+        raise HTTPException(status_code=404, detail=f"Card '{raw_name}' found, but no printing exists for language '{lang}'.")
+
     # Filter by set if provided
     if set:
         set_query = set.lower()
@@ -104,6 +111,7 @@ async def get_card_price(card_name: str = None, name: str = None, set: str = Non
         "name": data.get("name"),
         "set_name": data.get("set_name"),
         "set_code": data.get("set"),
+        "lang": data.get("lang"),
         "prices": data.get("prices", {}),
         "scryfall_uri": data.get("scryfall_uri"),
         "image": data.get("image_uris", {}).get("normal")
